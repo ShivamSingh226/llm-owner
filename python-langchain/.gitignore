@@ -5,3 +5,5 @@ __pycache__
 *.so
 .ipynb_checkpoints
 .env
+*.egg-info/
+dist/
