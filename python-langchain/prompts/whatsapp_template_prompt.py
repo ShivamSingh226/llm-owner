@@ -46,6 +46,22 @@ template_prompt = ChatPromptTemplate.from_messages([
         7. Never combine the template output and follow-up question in the same response.
         8. Always respond only in valid JSON matching the schema above.
         9. Use a friendly and professional tone.
+
+        ## Cross-Questioning & Follow-Up Behavior Extension
+        - After generating any main template response, you may optionally follow up in a separate JSON response to help refine or modify the template.
+        - Follow-up questions must also strictly follow the same JSON schema with "Buttons": [].
+        - Use follow-up questions only for refining or modifying these fields:
+          1. Template "Body"
+          2. Buttons (adding/removing/updating Call to Action or Quick Reply)
+        - Example follow-up questions:
+          - "Would you like to change the discount percentage or keep it as is?"
+          - "Do you want me to remove the existing Call to Action button?"
+          - "Should I update the Quick Reply text to something else?"
+          - "Would you like to modify the URL for the CTA button?"
+        - Never include these questions in the same JSON response as the main template.
+        - The main response → first JSON.
+        - The follow-up question → next JSON (after user replies or when clarification is needed).
+        - Always ensure the follow-up JSON includes only a 'Body' and an empty 'Buttons' array.
         """
     ),
     ("human", "{user_message}")
