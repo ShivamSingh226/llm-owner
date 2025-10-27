@@ -1,4 +1,3 @@
-# backend_ws.py
 from dotenv import load_dotenv, find_dotenv
 import os
 import asyncio
@@ -44,6 +43,35 @@ class ConversationState:
         self.last_sent_buttons = None
         self.awaiting_followup = False
 
+
+async def detect_intent(user_input: str):
+    """Use Gemini to classify user's intent (positive, negative, neutral)."""
+    intent_prompt = [
+        SystemMessage(content="You are an intent classifier. Output JSON only."),
+        HumanMessage(content=f"""
+            Determine if this user message expresses positive, negative, or neutral intent.
+            Examples:
+            - 'yes', 'ok', 'do it', 'sure', 'yep', 'alright', 'fine' → positive
+            - 'no', 'not now', 'skip', 'maybe later' → negative
+            - other unclear ones → neutral
+
+            Respond only as JSON:
+            {{
+                "intent": "positive" | "negative" | "neutral"
+            }}
+
+            User message: "{user_input}"
+        """)
+    ]
+    response = await call_llm(intent_prompt)
+    try:
+        data = json.loads(response.content.strip())
+        return data.get("intent", "neutral")
+    except Exception as e:
+        print("⚠️ Intent parsing error:", e)
+        return "neutral"
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -60,17 +88,41 @@ async def websocket_endpoint(websocket: WebSocket):
             user_input = await websocket.receive_text()
             user_input = user_input.strip()
 
+            # 🧠 Check if this message is a response to a suggestion
+            if state.last_sent_body and "consider adding a call-to-action button" in state.last_sent_body.lower():
+                user_intent = await detect_intent(user_input)
+
+                if user_intent == "positive":
+                    print("✅ User accepted suggestion – adding buttons automatically.")
+                    modified_template = {
+                        "Body": state.last_sent_body,
+                        "Buttons": [
+                            {"type": "Call to Action", "text": "Shop Now", "url": "www.google.com"},
+                            {"type": "Quick Reply", "text": "Tell me more", "url": ""}
+                        ]
+                    }
+                    await websocket.send_text(json.dumps(modified_template))
+                    state.last_sent_buttons = modified_template["Buttons"]
+                    continue
+
+                elif user_intent == "negative":
+                    print("❌ User declined suggestion.")
+                    await websocket.send_text(json.dumps({
+                        "Body": "No problem! Let me know if you'd like to modify the template later.",
+                        "Buttons": []
+                    }))
+                    continue
+
             # Add user input to history
             state.history.append(HumanMessage(content=user_input))
 
-            # Call AI
+            # Call AI for new template generation
             response = await call_llm(state.history)
             raw_output = response.content.strip()
             print("AI Raw Output:", raw_output)
 
             try:
-                data_list = []  # To handle multiple JSON objects if AI outputs them together
-                # Split by top-level }{ and fix for parsing
+                data_list = []  # Handle multiple JSON objects if AI outputs them together
                 if raw_output.count('}{') > 0:
                     parts = raw_output.replace('}{', '}|||{').split('|||')
                     for part in parts:
@@ -104,8 +156,9 @@ async def websocket_endpoint(websocket: WebSocket):
                                 {json.dumps(data)}
 
                                 Suggest one friendly follow-up question or suggestion to improve this template (Body or buttons).
+                                
                                 If the Buttons array is empty, suggest user to add CTA or quick reply buttons.
-                                Don't start with ```json`` or any markdown.It's very important. 
+                                Don't start with ```json or any markdown.It's very important. 
                                 Output JSON only in this schema:
                                 {{
                                     "Body": "<suggestion/question text>",
@@ -118,6 +171,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         try:
                             followup_json = json.loads(raw_followup)
                             await websocket.send_text(json.dumps(followup_json))
+                            state.last_sent_body = followup_json["Body"]
+                            state.last_sent_buttons = []
                         except Exception as e:
                             print("⚠️ Follow-up Parse Error:", e, "Raw follow-up:", raw_followup)
 

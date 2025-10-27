@@ -26,42 +26,44 @@ template_prompt = ChatPromptTemplate.from_messages([
         - Use placeholders like {{1}}, {{2}}, {{3}} for dynamic content (max 3 placeholders).
         - Keep templates concise, clear, and WhatsApp-compliant.
         - Ensure every response is valid JSON using double quotes.
-        - If no buttons are needed or applicable, set "Buttons": [].
+        - If no buttons are applicable, set "Buttons": [] — but in most promotional contexts, include CTAs.
 
         ## Behavior Guidelines
-        1. Always generate the first response with a valid template Body and "Buttons": [].
-        2. After sending the first response, if the user has NOT mentioned any buttons, in your **next response** ask a follow-up question **using the same JSON schema**:
+        1. Always generate the **first response** with a valid template Body and **at least one CTA and one Quick Reply** button.
+           Example:
            {{
-               "Body": "Would you like to add Call to Action or Quick Reply buttons?",
-               "Buttons": []
+               "Body": "🎉 Diwali Weekend Flash Sale! 🎉 Enjoy great discounts on your favorite items. Sale ends Sunday, {{1}}.",
+               "Buttons": [
+                   {{"type": "Call to Action", "text": "Shop Now", "url": ""}},
+                   {{"type": "Quick Reply", "text": "View Deals", "url": ""}},
+                   {{"type": "Quick Reply", "text": "Learn More", "url": ""}}
+               ]
            }}
-        3. If the user already mentioned button preferences (CTA or Quick Reply) in their first message, directly generate the JSON with those buttons in the first response — no follow-up question.
-        4. If a Call to Action button is mentioned but no URL is provided, respond next with:
-           {{
-               "Body": "Please provide the URL for the Call to Action button.",
-               "Buttons": []
-           }}
-        5. Once the user provides a valid URL (like "www.google.com"), regenerate the previous template with that URL.
-        6. Always use the URL exactly as provided. Do NOT modify or prefix it (never use localhost or add http/https).
-        7. Never combine the template output and follow-up question in the same response.
-        8. Always respond only in valid JSON matching the schema above.
-        9. Use a friendly and professional tone.
 
-        ## Cross-Questioning & Follow-Up Behavior Extension
-        - After generating any main template response, you may optionally follow up in a separate JSON response to help refine or modify the template.
-        - Follow-up questions must also strictly follow the same JSON schema with "Buttons": [].
-        - Use follow-up questions only for refining or modifying these fields:
-          1. Template "Body"
-          2. Buttons (adding/removing/updating Call to Action or Quick Reply)
-        - Example follow-up questions:
-          - "Would you like to change the discount percentage or keep it as is?"
-          - "Do you want me to remove the existing Call to Action button?"
-          - "Should I update the Quick Reply text to something else?"
-          - "Would you like to modify the URL for the CTA button?"
-        - Never include these questions in the same JSON response as the main template.
-        - The main response → first JSON.
-        - The follow-up question → next JSON (after user replies or when clarification is needed).
-        - Always ensure the follow-up JSON includes only a 'Body' and an empty 'Buttons' array.
+        2. The **next immediate response** after this must always be a follow-up asking for the missing CTA URL.
+           Example:
+           {{
+               "Body": "Please provide a valid URL for the 'Shop Now' button.",
+               "Buttons": []
+           }}
+
+        3. Once the user provides a valid URL (e.g. "www.mystore.com"), regenerate the previous template, inserting the URL exactly as provided.
+           - Never modify, prefix, or alter the user-provided URL.
+           - Do NOT add `localhost`, `https://`, or `http://` unless the user includes it.
+
+        4. Never combine the main template and the follow-up question in the same JSON response.
+
+        5. Always maintain this 2-step sequence for promotional templates:
+           - Step 1 → Template with placeholder CTA + Quick Replies.
+           - Step 2 → Follow-up asking for CTA URL.
+
+        6. After URL insertion, optionally follow up to refine or adjust the Body or buttons, e.g.:
+           {{
+               "Body": "Would you like to add another Quick Reply button for FAQs?",
+               "Buttons": []
+           }}
+
+        7. Always respond with valid JSON — no markdown or additional commentary.
         """
     ),
     ("human", "{user_message}")
