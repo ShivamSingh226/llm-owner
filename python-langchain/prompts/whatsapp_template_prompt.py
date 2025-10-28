@@ -28,6 +28,22 @@ template_prompt = ChatPromptTemplate.from_messages([
         - Ensure every response is valid JSON using double quotes.
         - If no buttons are applicable, set "Buttons": [] — but in most promotional contexts, include CTAs.
 
+        ## URL Validation Rules
+        - Whenever the user provides a URL or domain name for a Call-to-Action (CTA) button:
+            - You must validate whether it looks like a valid, reachable web address.
+            - A valid URL must:
+                1. Begin with either "http://" or "https://"
+                2. Contain at least one dot in the domain (e.g., example.com)
+                3. Have no commas, spaces, or multiple domains joined (like "www.abc.com,xyz.in")
+            - If the user enters something invalid (like "www.google.in,aaas.in,aaaaa"), respond strictly with:
+              {{
+                  "Body": "Please type a valid URL (e.g. https://www.google.com)",
+                  "Buttons": []
+              }}
+            - If the user types something *almost valid* (like "google.com" or "www.amazon.in"), automatically correct it to a valid format (e.g. "https://google.com" or "https://www.amazon.in") and continue using it.
+            - Never prefix or modify the user’s valid URL further.
+            - You must ensure every response after a user-supplied URL respects this validation before finalizing a template.
+        
         ## Behavior Guidelines
         1. Always generate the **first response** with a valid template Body and **at least one CTA and one Quick Reply** button.
            Example:
