@@ -17,19 +17,68 @@ template_prompt = ChatPromptTemplate.from_messages([
             "Body": "<template body text or follow-up question>",
             "Buttons": [
                 {{
-                    "type": "<Quick Reply or Call to Action>",
+                    "type": "<URL | PHONE_NUMBER | COPY_CODE | QUICK_REPLY>",
                     "text": "<button text>",
-                    "url": "<optional, only for Call to Action>"
+                    "url": "<required for URL only>",
+                    "urlType": "<static | dynamic>",
+                    "phone_number": "<required only for PHONE_NUMBER>",
+                    "example": "<required only for dynamic URL and COPY_CODE>"
                 }}
             ]
         }}
         - Use placeholders like {{1}}, {{2}}, {{3}} for dynamic content (max 3 placeholders).
         - Keep templates concise, clear, and WhatsApp-compliant.
         - Ensure every response is valid JSON using double quotes.
-        - If no buttons are applicable, set "Buttons": [] — but in most promotional contexts, include CTAs.
+        - If no buttons are applicable, set "Buttons": [].
+
+        ## Button Limit Rules
+        - Maximum total buttons = 10.
+        - Maximum URL buttons = 2.
+        - Maximum PHONE_NUMBER buttons = 1.
+        - Maximum COPY_CODE buttons = 1.
+        - Remaining buttons (up to total 10) must be QUICK_REPLY.
+
+        ## URL Button Schema Rules
+        - For URL buttons:
+            - "urlType": "static" → must NOT include "example"
+              Example:
+              {{
+                "type": "URL",
+                "url": "www.google.com",
+                "urlType": "static",
+                "text": "Visit Now"
+              }}
+            - "urlType": "dynamic" → must include:
+              {{
+                "example": [""]
+              }}
+              Example:
+              {{
+                "type": "URL",
+                "url": "www.flipkart.com/",
+                "urlType": "dynamic",
+                "text": "Shop Now",
+                "example": [""]
+              }}
+
+        ## COPY_CODE Button Schema
+        - COPY_CODE button must include:
+          {{
+            "type": "COPY_CODE",
+            "text": "Copy Code",
+            "example": []
+          }}
+
+        ## PHONE_NUMBER Button Schema
+        - PHONE_NUMBER button must include:
+          {{
+            "type": "PHONE_NUMBER",
+            "phone_number": "+919876543210",
+            "text": "Call Now"
+          }}
 
         ## URL Validation Rules
-        - Whenever the user provides a URL or domain name for a Call-to-Action (CTA) button:
+        - Whenever the user provides a URL or domain name for a URL-type button:
             - You must validate whether it looks like a valid, reachable web address.
             - A valid URL must:
                 1. Begin with either "http://" or "https://"
@@ -41,22 +90,36 @@ template_prompt = ChatPromptTemplate.from_messages([
                   "Buttons": []
               }}
             - If the user types something *almost valid* (like "google.com" or "www.amazon.in"), automatically correct it to a valid format (e.g. "https://google.com" or "https://www.amazon.in") and continue using it.
-            - Never prefix or modify the user’s valid URL further.
+            - Never prefix or modify the user’s fully valid URL.
             - You must ensure every response after a user-supplied URL respects this validation before finalizing a template.
-        
+
         ## Behavior Guidelines
-        1. Always generate the **first response** with a valid template Body and **at least one CTA and one Quick Reply** button.
+        1. Always generate the **first response** with a valid template Body and:
+           - At least one URL button (static or dynamic), and
+           - At least one QUICK_REPLY button
+
            Example:
            {{
                "Body": "🎉 Diwali Weekend Flash Sale! 🎉 Enjoy great discounts on your favorite items. Sale ends Sunday, {{1}}.",
                "Buttons": [
-                   {{"type": "Call to Action", "text": "Shop Now", "url": ""}},
-                   {{"type": "Quick Reply", "text": "View Deals", "url": ""}},
-                   {{"type": "Quick Reply", "text": "Learn More", "url": ""}}
+                   {{
+                     "type": "URL",
+                     "text": "Shop Now",
+                     "url": "",
+                     "urlType": "static"
+                   }},
+                   {{
+                     "type": "QUICK_REPLY",
+                     "text": "View Deals"
+                   }},
+                   {{
+                     "type": "QUICK_REPLY",
+                     "text": "Learn More"
+                   }}
                ]
            }}
 
-        2. The **next immediate response** after this must always be a follow-up asking for the missing CTA URL.
+        2. The **next immediate response** after this must always be a follow-up asking for the missing URL.
            Example:
            {{
                "Body": "Please provide a valid URL for the 'Shop Now' button.",
@@ -70,8 +133,8 @@ template_prompt = ChatPromptTemplate.from_messages([
         4. Never combine the main template and the follow-up question in the same JSON response.
 
         5. Always maintain this 2-step sequence for promotional templates:
-           - Step 1 → Template with placeholder CTA + Quick Replies.
-           - Step 2 → Follow-up asking for CTA URL.
+           - Step 1 → Template with placeholder URL + Quick Replies.
+           - Step 2 → Follow-up asking for URL.
 
         6. After URL insertion, optionally follow up to refine or adjust the Body or buttons, e.g.:
            {{

@@ -31,9 +31,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ✅ Universal JSON sanitizer
+def clean_json_output(raw_text: str):
+    """Cleans and extracts valid JSON from Gemini responses, even if wrapped in ```json fences."""
+    if not raw_text:
+        return None
+
+    text = raw_text.strip()
+
+    # Remove markdown fences if present
+    if text.startswith("```"):
+        text = text.strip("`").strip()
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+
+    # Handle multiple JSON objects if concatenated
+    try:
+        if text.count('}{') > 0:
+            parts = text.replace('}{', '}|||{').split('|||')
+            return [json.loads(p.strip()) for p in parts]
+        else:
+            return [json.loads(text)]
+    except json.JSONDecodeError as e:
+        print("⚠️ JSON cleaning failed:", e, "Raw text:", raw_text)
+        return None
+
+
 async def call_llm(messages):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, llm.invoke, messages)
+
 
 class ConversationState:
     """Stores conversation history per WebSocket connection."""
@@ -65,11 +93,12 @@ async def detect_intent(user_input: str):
     ]
     response = await call_llm(intent_prompt)
     try:
-        data = json.loads(response.content.strip())
-        return data.get("intent", "neutral")
+        cleaned = clean_json_output(response.content.strip())
+        if cleaned and isinstance(cleaned, list):
+            return cleaned[0].get("intent", "neutral")
     except Exception as e:
         print("⚠️ Intent parsing error:", e)
-        return "neutral"
+    return "neutral"
 
 
 @app.websocket("/ws")
@@ -122,13 +151,9 @@ async def websocket_endpoint(websocket: WebSocket):
             print("AI Raw Output:", raw_output)
 
             try:
-                data_list = []  # Handle multiple JSON objects if AI outputs them together
-                if raw_output.count('}{') > 0:
-                    parts = raw_output.replace('}{', '}|||{').split('|||')
-                    for part in parts:
-                        data_list.append(json.loads(part))
-                else:
-                    data_list.append(json.loads(raw_output))
+                data_list = clean_json_output(raw_output)
+                if not data_list:
+                    raise ValueError("Invalid JSON from model")
 
                 for data in data_list:
                     # Validate schema
@@ -158,7 +183,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 Suggest one friendly follow-up question or suggestion to improve this template (Body or buttons).
                                 
                                 If the Buttons array is empty, suggest user to add CTA or quick reply buttons.
-                                Don't start with ```json or any markdown.It's very important. 
+                                Don't start with ```json or any markdown. It's very important.
                                 Output JSON only in this schema:
                                 {{
                                     "Body": "<suggestion/question text>",
@@ -169,10 +194,15 @@ async def websocket_endpoint(websocket: WebSocket):
                         followup_response = await call_llm(follow_up_prompt)
                         raw_followup = followup_response.content.strip()
                         try:
-                            followup_json = json.loads(raw_followup)
+                            followup_data = clean_json_output(raw_followup)
+                            if not followup_data:
+                                raise ValueError("Invalid follow-up JSON")
+                            followup_json = followup_data[0]
+
                             await websocket.send_text(json.dumps(followup_json))
                             state.last_sent_body = followup_json["Body"]
                             state.last_sent_buttons = []
+
                         except Exception as e:
                             print("⚠️ Follow-up Parse Error:", e, "Raw follow-up:", raw_followup)
 
