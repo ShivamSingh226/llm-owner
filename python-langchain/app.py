@@ -175,10 +175,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     # If not a follow-up, generate dynamic follow-up suggestion
                     if not is_followup:
                         follow_up_prompt = [
-                            SystemMessage(content="You are a WhatsApp template AI assistant. Only output valid JSON."),
+                            SystemMessage(content="""You are a WhatsApp template AI assistant. Only output valid JSON.
+                                          
+                                          IMPORTANT RULE:
+                                          - The template supports limit number of buttons.
+                                          - Allowed button limits(hard and strict rules):
+                                            - Maximum total buttons = 10.
+                                            - Maximum URL buttons = 2.
+                                            - Maximum PHONE_NUMBER buttons = 1.
+                                            - Maximum COPY_CODE buttons = 1.
+                                            - Remaining buttons (up to total 10) must be QUICK_REPLY.
+                                          - Never suggest adding more buttons if the user has already reached these limits.
+                                          - If user at anytime prompts to add more buttons than the above-prescribed limits, generate templates with maximum allowed buttons only as per the above rules.For example, if user asks to add 3 URL buttons, generate template with only 2 URL buttons and ignore the rest.Similarly, if user asks to add 2 PHONE_NUMBER buttons, generate template with only 1 PHONE_NUMBER button and ignore the rest.COPY_CODE button limit is 1 as well.
+                                          - After generating template with maximum allowed buttons, inform user regarding the prescribed button limits and continue with your suggestion in the same JSON.
+                                          
+                                          """),
                             HumanMessage(content=f"""
                                 I just generated this template:
                                 {json.dumps(data)}
+
+                                When the number of buttons to be added by the user and also the type of buttons exceeds the allowed limits,after generating the template with maximum buttons as per the precribed limit above,inform user about the prescribed button limits and never suggest adding more buttons in the same JSON body of suggestion which you are going to send.
+
 
                                 Suggest one friendly follow-up question or suggestion to improve this template (Body or buttons).
                                 

@@ -143,7 +143,29 @@ template_prompt = ChatPromptTemplate.from_messages([
            }}
 
         7. Always respond with valid JSON — no markdown or additional commentary.
+
+
+        ## Button Overflow & Maximum Limit Rule
+        - If the user requests more buttons than allowed, do NOT warn the user or reject the request.
+        - Instead, ALWAYS generate the template using the maximum number of buttons permitted by WhatsApp rules.
+        - Apply these maximum limits:
+            - Maximum total buttons = 10
+            - Maximum URL buttons = 2
+            - Maximum PHONE_NUMBER buttons = 1
+            - Maximum COPY_CODE buttons = 1
+            - Remaining buttons (up to total 10) must be QUICK_REPLY buttons.
+        - If the user requests more than the allowed count:
+            - If user asks for more than 2 URL buttons → generate exactly 2.
+            - If user asks for more than 1 PHONE_NUMBER button → generate exactly 1.
+            - If user asks for more than 1 COPY_CODE button → generate exactly 1.
+            - If user asks for more QUICK_REPLY buttons than can fit within the total 10-button limit → generate only as many as fit.
+        - NEVER output an overflow warning inside the template.
+        - NEVER say "You have exceeded the limit".
+        - The LLM backend follow-up suggestion will handle informing the user about limits.
+
         """
+
+        
     ),
     ("human", "{user_message}")
 ])
