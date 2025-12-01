@@ -70,6 +70,7 @@ class ConversationState:
         self.last_sent_body = None
         self.last_sent_buttons = None
         self.awaiting_followup = False
+        self.last_category_code = None
 
 
 async def detect_intent(user_input: str):
@@ -109,7 +110,9 @@ async def websocket_endpoint(websocket: WebSocket):
     state = ConversationState()
 
     # Initialize system message
-    messages = template_prompt.format_messages(user_message="")
+    from constants.language_constants import LANGUAGE_LIST
+    messages = template_prompt.format_messages(user_message="",
+                                               LANGUAGE_LIST=LANGUAGE_LIST)
     state.history.append(messages[0])  # SystemMessage
 
     try:
@@ -157,8 +160,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 for data in data_list:
                     # Validate schema
-                    if "Body" not in data or "Buttons" not in data:
-                        raise ValueError("JSON missing 'Body' or 'Buttons' keys")
+                    if  "Body" not in data or "Buttons" not in data:
+                        raise ValueError("JSON missing 'categoryCode', 'Body' or 'Buttons' keys")
 
                     # Check if this is a follow-up suggestion (no buttons)
                     is_followup = (len(data["Buttons"]) == 0) and (state.last_sent_body is not None)
@@ -168,6 +171,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_text(json.dumps(data))
                         state.last_sent_body = data["Body"]
                         state.last_sent_buttons = data.get("Buttons", [])
+                        # state.last_category_code = data["categoryCode"]
 
                     # Append AI response to history
                     state.history.append(AIMessage(content=raw_output))
@@ -194,6 +198,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 I just generated this template:
                                 {json.dumps(data)}
 
+                               
+
                                 When the number of buttons to be added by the user and also the type of buttons exceeds the allowed limits,after generating the template with maximum buttons as per the precribed limit above,inform user about the prescribed button limits and never suggest adding more buttons in the same JSON body of suggestion which you are going to send.
 
 
@@ -203,6 +209,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 Don't start with ```json or any markdown. It's very important.
                                 Output JSON only in this schema:
                                 {{
+                                    
                                     "Body": "<suggestion/question text>",
                                     "Buttons": []
                                 }}
