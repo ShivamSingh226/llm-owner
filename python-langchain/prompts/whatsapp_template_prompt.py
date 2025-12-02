@@ -98,7 +98,7 @@ template_prompt = ChatPromptTemplate.from_messages([
         - header.body should be concise and relevant to the template purpose.
 
 
-        - Use placeholders like {{1}}, {{2}}, {{3}} for dynamic content (max 3 placeholders).
+        - Use placeholders like {{{{1}}}}, {{{{2}}}}, {{{{3}}}} for dynamic content (max 3 placeholders).
         - Keep templates concise, clear, and WhatsApp-compliant.
         - Ensure every response is valid JSON using double quotes.
         - If no buttons are applicable, set "Buttons": [].
@@ -181,7 +181,7 @@ template_prompt = ChatPromptTemplate.from_messages([
                    "type": "IMAGE",
                    "body": "Celebrate Diwali with Amazing Deals!"
                }},
-               "Body": "🎉 Diwali Weekend Flash Sale! 🎉 Enjoy great discounts on your favorite items. Sale ends Sunday, {{1}}.",
+               "Body": "🎉 Diwali Weekend Flash Sale! 🎉 Enjoy great discounts on your favorite items. Sale ends Sunday, {{{{1}}}}.",
                "Buttons": [
                    {{
                      "type": "URL",

@@ -6,18 +6,20 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from prompts.whatsapp_template_prompt import template_prompt
+from utils.cost_calculator import calculate_cost
 import uvicorn
 
 # Load environment variables
 load_dotenv(find_dotenv(), override=True)
-GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 # Initialize Gemini model
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=GOOGLE_API_KEY
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    openai_api_key=OPENAI_API_KEY
 )
 
 executor = ThreadPoolExecutor(max_workers=2)
@@ -71,6 +73,7 @@ class ConversationState:
         self.last_sent_buttons = None
         self.awaiting_followup = False
         self.last_category_code = None
+        self.total_spent=0.0
 
 
 async def detect_intent(user_input: str):
@@ -93,6 +96,7 @@ async def detect_intent(user_input: str):
         """)
     ]
     response = await call_llm(intent_prompt)
+    print("The intent detection: 💰💰💰 ",response);
     try:
         cleaned = clean_json_output(response.content.strip())
         if cleaned and isinstance(cleaned, list):
@@ -152,17 +156,42 @@ async def websocket_endpoint(websocket: WebSocket):
             response = await call_llm(state.history)
             raw_output = response.content.strip()
             print("AI Raw Output:", raw_output)
+            print("Response is: ", response)
+            # --- START ADDING TOKEN INFORMATION HERE (Location 1) ---
+            
+            # --- TOKEN USAGE PRINTING (MAIN) ---
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                usage = response.usage_metadata
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+
+                print(f"💰 Usage (Main): Input={input_tokens}, Output={output_tokens}")
+                cost_details=calculate_cost(input_tokens,output_tokens)
+                print(f"💰 Cost (Main) ₹: {cost_details}")
+
+            
+            # print("Raw cleaned response:", cleaned)
 
             try:
                 data_list = clean_json_output(raw_output)
                 if not data_list:
                     raise ValueError("Invalid JSON from model")
+                
+
+                # Get tokens if available
+                tokens = {
+                    "input": input_tokens if 'input_tokens' in locals() else 0,
+                    "output": output_tokens if 'output_tokens' in locals() else 0,
+                    "total_cost":cost_details["total_cost"]
+                }
 
                 for data in data_list:
                     # Validate schema
                     if  "Body" not in data or "Buttons" not in data:
                         raise ValueError("JSON missing 'categoryCode', 'Body' or 'Buttons' keys")
-
+                    state.total_spent+=cost_details["total_cost"]
+                    data["total_spent"]=state.total_spent
+                    data["tokens"]=tokens
                     # Check if this is a follow-up suggestion (no buttons)
                     is_followup = (len(data["Buttons"]) == 0) and (state.last_sent_body is not None)
 
@@ -174,7 +203,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         # state.last_category_code = data["categoryCode"]
 
                     # Append AI response to history
-                    state.history.append(AIMessage(content=raw_output))
+                    state.history.append(AIMessage(content=json.dumps(data)))
 
                     # If not a follow-up, generate dynamic follow-up suggestion
                     if not is_followup:
@@ -217,12 +246,27 @@ async def websocket_endpoint(websocket: WebSocket):
                         ]
                         followup_response = await call_llm(follow_up_prompt)
                         raw_followup = followup_response.content.strip()
+                        print("The followup_response is: " ,followup_response );
+                        if hasattr(followup_response, "usage_metadata") and followup_response.usage_metadata:
+                            usage = followup_response.usage_metadata
+                            input_tokens = usage.get("input_tokens", 0)
+                            output_tokens = usage.get("output_tokens", 0)
+
+                            print(f"💰 Usage (Follow-up): Input={input_tokens}, Output={output_tokens}")
+                            cost_details=calculate_cost(input_tokens,output_tokens)
+                            print(f"💰 Cost (Follow-up) ₹: {cost_details}")
                         try:
                             followup_data = clean_json_output(raw_followup)
                             if not followup_data:
                                 raise ValueError("Invalid follow-up JSON")
                             followup_json = followup_data[0]
-
+                            followup_json["tokens"] = {
+                                "input": input_tokens if 'input_tokens' in locals() else 0,
+                                "output": output_tokens if 'output_tokens' in locals() else 0,
+                                "total_cost":cost_details["total_cost"]
+                            }
+                            state.total_spent+=cost_details["total_cost"]
+                            followup_json["total_spent"]=state.total_spent
                             await websocket.send_text(json.dumps(followup_json))
                             state.last_sent_body = followup_json["Body"]
                             state.last_sent_buttons = []
