@@ -99,6 +99,44 @@ template_prompt = ChatPromptTemplate.from_messages([
 
 
         - Use placeholders like {{{{1}}}}, {{{{2}}}}, {{{{3}}}} for dynamic content (max 3 placeholders).
+        - Whenever the template Body contains placeholders like {{{{1}}}}, {{{{2}}}}, {{{{3}}}}, ensure that the JSON MUST include a new field called "bodyText".
+        - The bodyText field MUST follow this exact structure:
+          "bodyText": {{ 
+                [[<text_for_placeholder_1>,<text_for_placeholder_2>,<text_for_placeholder_3>]]
+          }}
+        - If there is only one placeholder {{{{1}}}}, MUST still return the response as:
+          "bodyText": {{ 
+                [[<text_for_placeholder_1>]]
+          }}
+        - If there are two placeholders {{{{1}}}} and {{{{2}}}}, MUST return the response as:
+          "bodyText": {{  
+                [[<text_for_placeholder_1>,<text_for_placeholder_2>]]
+          }}
+        - If there are three placeholders {{{{1}}}}, {{{{2}}}}, and {{{{3}}}}, MUST return the response as:
+          "bodyText": {{
+                [[<text_for_placeholder_1>,<text_for_placeholder_2>,<text_for_placeholder_3>]]
+          }}
+        - The value of each placeholder text must be relevant to the template Body content and context.
+        - The value of each placeholder text MUST be intelligently inferred by the LLM based on the context of the template Body.
+            Just for the sake of example, if the template Body is:
+              - If the body has "... Sale ends {{{{1}}}}", the placeholder_value_1 text could be "Sunday, 10th Nov".
+              - If the body has "Your order {{{{1}}}} is confirmed and will arrive by {{{{2}}}}", then:
+                  - placeholder_value_1 could be "12345ABC"
+                  - placeholder_value_2 could be "25th Dec"
+              - If the body has "Your appointment is scheduled on {{{{1}}}} at {{{{2}}}} with {{{{3}}}}", then:
+                  - placeholder_value_1 could be "12th Jan"
+                  - placeholder_value_2 could be "3:00 PM"
+                  - placeholder_value_3 could be "Dr. Smith"
+        - The chosen placeholder values MUST be realistic and directly relevant to the template Body content.
+        - NEVER use empty strings, generic terms like "placeholder", or non-informative values like "N/A" for placeholder texts.
+        - NEVER ask the user for placeholder values; always infer them yourself.
+        - LLM must ALWAYS generate placeholder values on its own based on the template Body context.
+        - If the body contains no placeholders, then:
+          {{
+                "bodyText": []
+          }}
+        - Always include the "bodyText" field in every response, even if it's an empty array.
+        - The order of placeholder texts in "bodyText" MUST match the numeric order of placeholders in the Body.
         - Keep templates concise, clear, and WhatsApp-compliant.
         - Ensure every response is valid JSON using double quotes.
         - If no buttons are applicable, set "Buttons": [].
@@ -182,6 +220,7 @@ template_prompt = ChatPromptTemplate.from_messages([
                    "body": "Celebrate Diwali with Amazing Deals!"
                }},
                "Body": "🎉 Diwali Weekend Flash Sale! 🎉 Enjoy great discounts on your favorite items. Sale ends Sunday, {{{{1}}}}.",
+               "bodyText": [[ "10th Nov" ]],
                "Buttons": [
                    {{
                      "type": "URL",

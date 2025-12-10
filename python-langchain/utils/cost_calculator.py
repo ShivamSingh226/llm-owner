@@ -6,6 +6,7 @@ def calculate_cost(input_tokens: int, output_tokens: int):
     """
     Calculates cost separately for input & output tokens based on GPT-4o-mini pricing.
     """
+    rate=88.0
     try:
         response = requests.get("https://api.frankfurter.dev/v1/latest?base=USD&symbols=INR")
         data = response.json()
